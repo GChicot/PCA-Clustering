@@ -1,0 +1,442 @@
+---
+title: "Práctica I"
+description: |
+  Análisis de componentes principales
+author:
+  - name: Gerard Chicot Navalls (DNI 41579486V)
+    affiliation: Universidad Complutense de Madrid
+    affiliation_url: 
+date: "`r Sys.Date()`"
+output:
+    distill::distill_article:
+        highlight: kate
+        colorlinks: true
+        code_folding: false
+        toc: true            
+        toc_depth: 3     
+---
+
+```{r setup, include = TRUE}
+# Ajuste comunes de los chunk
+knitr::opts_chunk$set(fig.width = 9, fig.asp = 1, out.width = "100%",
+                      message = FALSE, warning = FALSE,
+                      echo = TRUE, res = 400)
+```
+
+# Instrucciones (leer antes de empezar)
+
+* Modifica dentro del documento `.Rmd` tus datos personales (nombre y DNI) ubicados en la cabecera del archivo.
+
+* Asegúrate antes de seguir editando el documento que el archivo `.Rmd` compila (Knit) correctamente y se genera el `html` correspondiente.
+
+* Los chunks creados están o vacíos o incompletos, de ahí que tengan la opción `eval = FALSE`. Una vez que edites lo que consideres debes de cambiar a `eval = TRUE` para que los chunk se ejecuten
+
+## Paquetes necesarios
+
+Necesitaremos los siguientes paquetes:
+
+```{r paquetes}
+library(readxl)
+library(skimr)
+library(corrr)
+library(corrplot)
+library(tidyverse)
+library(tidymodels)
+library(factoextra)
+library(FactoMineR)
+```
+
+
+# Carga de datos
+
+El archivo de datos a usar será `distritos.xlsx`
+
+```{r}
+distritos <- read_xlsx(path = "./distritos.xlsx")
+```
+
+El fichero contiene **información socioeconómica de los distritos de Madrid**
+
+```{r}
+glimpse(distritos)
+```
+
+
+Las variables recopilan la siguiente información:
+
+* `Superficie`: superficie del distrito (hectáreas)
+* `Densidad`: densidad de población
+* `Pob_0_14`: proporción de población menor de 14 años
+* `Pob_15_29`: proporción de población de 15 a 29
+* `Pob_30_44`: proporción de población de 30 a 44
+* `Pob_45_64`: proporción de población de 45 a 64
+* `Pob_65+`: proporción de población de 65 o mas
+* `N_Española`: proporción de población española
+* `Extranjeros`: proporción de población extranjera
+* `N_ hogares`: número de hogares en miles
+* `Renta`: renta media en miles
+* `T_paro`: porcentaje de población parada
+* `T_paro_H`: porcentaje de hombres parados
+* `T_ paro_M`: porcentaje de mujeres paradas
+* `Paro_LD`: proporción de población parada de larga duración
+* `Analfabetos`: proporción de población que no sabe leer ni escribir
+* `Primaria_ inc`: proporción de población solo con estudios primarios
+* `ESO`: proporción de población solo ESO
+* `fp_bach`: proporción de población solo con FP o Bachillerato
+* `T_medios`: proporción de población Titulada media
+* `T_superiores`: proporción de población con estudios superiores
+* `S_M2_vivienda`: superficie media de la vivienda
+* `Valor_V`: valor catastral medio de la vivienda
+* `Partido`: partido más votado en las municipales 2019
+
+
+
+
+# Ejercicio 1:
+
+
+> Calcula los estadísticos básicos de todas las variables con la función `skim()` del paquete `{skimr}`
+
+
+```{r eval = TRUE}
+# Completa el código
+skim(distritos)
+```
+
+# Ejercicio 2
+
+## Ejercicio 2.1
+
+> Calcula la matriz de covarianzas (guárdala en `cov_mat`). Recuerda que la matriz de covarianzas y de correlaciones solo puede ser calculada para variables numéricas.
+
+```{r eval = TRUE}
+# Completa el código
+
+cov_mat <-
+  cov(distritos %>% select(-Distrito, -Partido))
+cov_mat
+
+```
+
+## Ejercicio 2.2
+
+> Calcula la matriz de correlaciones, de forma numérica (guárdala en `cor_mat`) y gráfica, haciendo uso de los paquetes `{corrr}` y `{corrplot}`. Responde además a las preguntas: ¿cuáles son las variables más correlacionadas (linealmente)? ¿Cómo es el sentido de esa correlación?
+
+
+```{r eval = TRUE}
+# Completa el código
+
+distritos2 <- distritos %>% select(-Distrito, -Partido)
+
+
+cor_mat <-
+  distritos2 %>% correlate(diagonal = 1)
+
+cor_mat
+
+```
+
+```{r eval = TRUE}
+# Completa el código
+corrplot(cor(distritos2), type = "upper",
+         tl.col = "black",  method = "square")
+
+```
+Podemos observar en el gráfico que existe correlación cuando el cuadrado es un azul o rojo oscuro. Las correlaciones existen cuando su valor es superior a 0.75 o inferior a -0.75. En el azul viene a explicar una correlación positiva, es decir, cuando una variable es azul oscuro con otra quiere decir que cuando una incrementa la otra también. En el otro caso, vemos como el rojo explica una correlación negativa, es decir, cuando una variable es rojo ocuro con otra quiere decir que cuando una incrementa la otra disminuie. 
+
+Si observamos el gráfico podemos ver como hay variables muy correladas. En la parte superior las variables no tienen tanta correlación pero en la parte inferior si que existe una gran cantidad de variables correladas. 
+
+- Superficie es una variable que no tiene correlación con ninguna, tiene un poco con Densidad y Pob_0_14 pero no lo suficiente como para determinar una correlación.
+
+- Densidad está correlada negativa con Pob_0_14.
+
+- Pob_0_14 tiene un poco de correlación positiva con Paro_LD pero no lo suficiente. 
+
+- Pob_15_29 esta correlada negativamente con N_Española y T_medios, y está correlada postivamente con Extranjeros. Por otra parte tiene un poco de correlación positiva con T_paro, T_paro_H, T_paro_M, Analfabetos, Primaria_inc, ESO.
+
+- Pob_45_64 está tiene un poco de correlación positiva en Analfabetos y Primaria_inc, y de forma positiva en T_medios.
+
+- Pob_65+ vemos como hay correlación positiva en N_Española, Renta, T_Superiores y Valor_V. De forma negativa vemos como hay T_paro, T_paro_H, T_paro_M, Analfabetos y ESO.
+
+- Podemos observar que N_Española tiene mucha correlación con Extranjeros, T_Paro, T_Paro_H, T_Paro_M de forma negativa, y tiene un poco también Analfavetos, ESO. Por otra parte también tiene correlaciones positivas con Renta y T_medios, también pero más floja con T_Superiores, S_M2_vivienda, Valor_V.
+
+- Extranjeros tiene correlación positiva con T_Paro, T_Paro_H, T_Paro_M, Primaria_inc y ESO. Tiene también negativas con la Renta y T_medios.
+
+- La Renta es una variable muy correlada, tanto positivo como negativo. En formato positivo vemos como hay correlación con T_medios, T_Superiores, S_M2_vivienda, Valor_V. En formato negativo povemos observar T_Paro, T_Paro_H, T_Paro_M, Analfabetos, Primaria_inc, ESO.
+
+- T_Paro tiene una correlación positiva muy fuerte con T_Paro_H, T_Paro_M, Analfabetos, Primaria_inc, ESO y tiene una correlación negativa con T_medios, T_Superiores, S_M2_vivienda, Valor_V.
+
+- T_Paro_H tiene una correlación positiva muy fuerte con T_Paro_M, Analfabetos, Primaria_inc, ESO y tiene una correlación negativa con T_medios, T_Superiores, S_M2_vivienda, 
+Valor_V.
+
+- Paro_LD tiene un poco de correlación con los Analfabetos y ESO en formato positivo y con T_Superior de forma negativa.
+
+- Analfabetos tiene una correlación positiva muy fuerte con Primaria_inc, ESO y tiene una correlación negativa con T_medios, T_Superiores, S_M2_vivienda, Valor_V.
+
+- Primaria_inc tiene una correlación positiva muy fuerte con  ESO y tiene una correlación negativa con T_medios, T_Superiores, S_M2_vivienda, Valor_V.
+
+- ESO tiene una correlación negativa con T_medios, T_Superiores, S_M2_vivienda, Valor_V.
+
+- T_medios tiene una correlación positiva T_Superiores, S_M2_vivienda, Valor_V.
+
+- T_Superiores tiene una correlación positiva S_M2_vivienda, Valor_V.
+
+- S_M2_vivienda tiene una correlación positiva Valor_V.
+
+
+Claramente vemos como las correlaciones explican los datos de una forma muy evidente. En general podemos ver cómo a más Paro menos estudios y cuandos los estudios son mejores cómo es en el caso de T_medios o T_superiores vemos cómo hay correlación positiva con los S_M2_vivienda y Valor_V. Por otra parte los datos nos explican que los Extranjeros tienden a tener menos estudios con lo cual, tienen más Paro. En cambio N_Españoles tiende a tener Renta, T_Medios, T_Superiores con lo cual tienen S_M2_vivienda Y Valor_V.
+
+
+# Ejercicio 3
+
+> Haciendo uso de `{ggplot2}`, representa los gráficos de dispersión de las variables T_paro (eje y) con relación a Analfabetos (eje x), y T_paro en relación a T_superiores. Comentar el sentido de las nubes de puntos, junto con las correlaciones obtenidas anteriormente
+
+```{r eval = TRUE}
+# Completa el código
+ggplot(distritos, aes(x = Analfabetos, y = T_paro)) +
+  geom_point(size = 7, alpha = 0.6) +
+  labs(x = "Analfabetos", y = "T_paro",
+       title = "Gráfico dispersión") +
+  theme_minimal()
+```
+
+En el gráfico de dispersión podemos apreciar la relación entre T_Paro y Analfabetos es positiva y explica mis conclusiones del ejercicio anterior, tiene mucha lógica concluir que cuanto más Analfabetos más T_Paro. 
+
+```{r eval = TRUE}
+# Completa el código
+ggplot(distritos, aes(x = T_superiores, y = T_paro)) +
+  geom_point(size = 7, alpha = 0.6) +
+  labs(x = "T_paro", y = "T_superiores",
+       title = "Gráficos de dispersión") +
+  theme_minimal()
+```
+
+Vemos cómo en esta gráfica de dispersión T_Superiores y T_paro tiene un sentido negativo y vuelve a reafirma la conclusión anterior al ser completamente inversa. Al tener estudios superiores el T_paro es casi nulo, pero al ir bajando los T_superiores vemos como el T_Paro augmenta. 
+
+
+# Ejercicio 4
+
+## Ejercicio 4.1
+
+> Haciendo uso de los paquetes `{FactoMineR}` y `{factoextra}`, realiza un análisis de componentes principales y guárdalo en el objeto `pca_fit`
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit <-
+  PCA(distritos2, scale.unit = TRUE, ncp = ncol(distritos2), graph = FALSE)
+```
+
+
+> Obtén los autovalores asociados y detalla los resultados. ¿Cuánto explica la primera componente? ¿Cuánto explican las primeras 10 componentes?
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit$eig
+```
+Con la primera componente ya se explica el 52%, y con las 10 primeras llegamos a 99%. El porcentage de la varianza se va sumando a cada componente y vemos como cada vez la variable tiene menos peso hasta llegar a un punto en que la importancia de una variable es tan baja que no tiene casi peso.
+
+> Obtén los autovectores por columnas y la contribución de cada variable original a la varinza explicada de cada componente. 
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit$svd$V
+```
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit$var$contrib
+```
+
+> Explícita además la expresión de la primera componente en función de las variables originales.
+
+$$\Phi_1 = -0.0449 * Superficie - 0.0501 * Densidad + 0.0555 * Pob_0_14 + 0.167 * Pob_15_29 + $$
+$$0.009 * Pob_30_44 + 0.155 * Pob_45_64 - 0.170 * Pob_65+ - 0.211 * N_Española + 0.204 * Extranjeros + 0.040 * N_hogares - 0.273 * Renta + $$
+$$ 0.286 * T_paro + 0.285 * T_paro_H + 0.282 * T_paro_M + 0.149 * Paro_LD + 0.275 * Analfabetos + 0.276 * Primaria_inc + $$
+$$0.282 * ESO + 0.051 * fp_bach - 0.248 * T_medios - 0.274 * T_superiores - 0.199 * S_M2_vivienda - 0.265 * Valor_V$$
+ 
+> Obtén los scores (las nuevas coordenadas de los datos, proyectados en las nuevas direcciones).
+
+```{r eval = TRUE}
+# Completa el código
+pca_scores <- as_tibble(pca_fit$ind$coord)
+pca_scores # Nuevas coordenadas
+```
+
+## Ejercicio 4.2
+
+> Determina el número de componentes para explicar al menos el 95% de varianza. Realiza el mismo análisis del ejercicio 4.1 pero solo 
+seleccionando dichas componentes. ¿Qué grupos de variables contribuyen más a cada componente?
+
+```{r eval = TRUE}
+# Completa el código
+
+pca_fit2 <-
+  PCA(distritos2, scale.unit = TRUE, ncp=7, graph = FALSE)
+
+```
+
+```{r eval = TRUE}
+pca_fit2$eig
+```
+
+```{r eval = TRUE}
+pca_fit2$var$contrib
+```
+
+Para llegar al 95% de varianza solo tenemos que seleccionar de la componente 1 a la 7, una vez superado el 95% podemos observar como las 14 componentes restantes contienen un porcentage de la varianza cada vez más bajo. 
+
+> Visualiza la varianza explicada por cada componente haciendo uso de `fviz_eig()`
+
+```{r eval = TRUE}
+# Completa el código
+fviz_eig(pca_fit,
+         barfill = "darkolivegreen",
+         addlabels = TRUE) +
+  theme_minimal() +
+    labs(x = "Componente", 
+       y = "% varianza explicada",
+       title = "Porcentaje de varianza explicada")
+```
+
+Grácias a este gráfico podemos de forma más clara el procentaje de varianza explicada por cada componente y ver que peso tiene cada una. Solo la primera ya contiene el 52.1 de varianza y con 7 variables podemos explicar el 95% de la información.
+
+> Construye un gráfico para visualizar la varianza explicada acumulada (con una línea horizontal que nos indica el umbral del 95%)
+
+```{r eval = TRUE}
+# Completa el código
+cumvar <- as_tibble(pca_fit$eig)
+names(cumvar) <- c("lambda", "var", "cumvar")
+
+ggplot(cumvar, aes(x = 1:20, y = cumvar)) +
+geom_col(fill = "pink") +
+geom_hline(yintercept = 95,
+linetype = "dashed") +
+theme_minimal() +
+labs(x = "Componente",
+y = "% varianza explicada",
+title = "% varianza acumulada")
+```
+Con este gráfico podemos ver de otra forma el número de variables que necesito para llegar al 95% de varianza acumulada.
+
+
+> Mostrar los coeficientes (scores) para obtener las componentes principales. ¿Cuál es la expresión para calcular la primera 
+componente en función de las variables originales?
+
+
+```{r eval = TRUE}
+# Completa el código
+
+pca_fit2$svd$V
+
+```
+
+$$\Phi_1 = - 0.044 * Superficie - 0.050 * Densidad + 0.055 * Pob_0_14 + 0.167 * Pob_15_29 + $$
+
+$$0.009 * Pob_30_44 + 0.155 * Pob_45_64 - 0.170 * Pob_65+ - 0.211 * N_Española + 0.204 * Extranjeros + 0.040 * N_hogares - $$
+
+$$0.273 * Renta + 0.286 * T_paro + 0.285 * T_paro_H + 0.282 * T_paro_M + 0.149 * Paro_LD + 0.275 * Analfabetos + 0.276 * Primaria_inc + $$
+$$0.282 * ESO + 0.051 * fp_bach - 0.248 * T_medios - 0.274 * T_superiores - 0.199 * S_M2_vivienda - 0.265 * Valor_V$$
+ 
+> Usando `fviz_pca_var()` visualiza de forma bidimensional como se relacionan las variables originales con las dos componentes que mayor cantidad de varianza capturan. Detalla los resultados. ¿Ves algún grupo de variables? ¿Cuál de las variables es la que está peor explicada?
+
+```{r eval = TRUE}
+# Completa el código
+col <- c("#00AFBB", "#E7B800", "#FC4E07")
+fviz_pca_var(pca_fit, col.var = "cos2",
+             gradient.cols = col,
+             repel = TRUE) +
+  theme_minimal() + 
+  labs(title = "Coordenadas de las variables",
+       color = "Prop. var. explicada")
+```
+
+Nos encontramos con la proporción de la varianza explicada. En este gráfico podemos observar como según la proporción de la varianza explicada que porcentaje tiene cada variable en un eje de coordenadas y así ver el peso de cada variable.
+
+Podemos ver como las variables con mayor peso son los Analfabetos, Primara_inc, ESO, T_paro, T_paro_H y T_paro_M. Seguidamente podemos ver como también tienen mucha varianza las variables Extranjeros N_Española, T_medios, Renta, Valor_V, T_superiores. Seguidamente podemos ver como Pob_0_14, S_M2_vivienda, Paro_LD y Pob_15_29 estan en el medio de la proporción. Con casi muy poco porcentaje de varianza explicada llegamos a las variables Pob_30_40, Superficie y Pob_65+. Para terminar con el gráfico encontramos a las variables con menos explicación donde N_Hogares y Superficie son casi nulas. 
+
+> Haciendo uso `fviz_cos2()`, visualiza el porcentaje de la varianza de las variables que es explicada por las tres primeras componentes
+
+```{r eval = TRUE}
+# Completa el código
+fviz_cos2(pca_fit,choice = "var", axes = 1:3)
+```
+
+Vemos como con las tres primeras componentes tenemos una buena explicación de casi todas las variables. Tienen una gran capacidad de explicación ya que casi consiguen más del 50% de todas las variables menos la última ya que la penultima esta rondando el 50%.
+
+> Con `fviz_pca_biplot()` visualiza en las dos dimensiones que más varianza capturan los clústers de observaciones con las elipses definidas por las matrices de covarianza de cada uno de los grupos (añadiendo el partido más votado en cada distrito en color). Teniendo en cuenta el anterior biplot,  comentar las características socioeconómicas de algunos grupos de distritos.
+
+```{r eval = TRUE}
+# Completa el código
+fviz_pca_biplot(pca_fit,
+                col.ind= distritos$Partido,
+                palette = "jco",
+                addEllipses = TRUE,
+                label = "var",
+                col.var = "black",
+                repel = TRUE,
+                legend.title = "Partido más votado")
+```
+
+Podemos observar como hay dos grandes grupos en el gráfico, uno mucho más grande que el otro. En amarillo encontramos al grupo del PP, donde está compuesto por las variables N_Española, T_medios, Renta, Valor_V y T_superiores que son las variables que van relacionadas con la posesión de estudios y capital. En azul encontramos el otro grupo, Más Madrid, que está compuesto por todas las otras variables del estudio. Dichas variables están compuestos por Analfabetos, ESO, T_paro, T_paro_H, T_paro_M, Pob_0_14, Pob_15_29... Todas estas variables son las que anteriormente hemos relacionado con poca renta y pocos estudios. 
+
+> ¿Qué valor tiene el distrito de Salamanca en la Componente 1? ¿Y Villaverde? ¿Qué distrito tiene un valor más alto de la Componente 4?
+
+```{r}
+pca_scores[4,1]
+```
+
+Salmanca tiene un -4.32 en la Componente 1.
+
+```{r}
+pca_scores[17,1]
+```
+
+Villaverde tiene un 5.48 en la Componente 1.
+
+```{r}
+pca_scores[4]
+```
+
+Si nos fijamos en los valores de la componente 4 podemos ver como el número más grande es de 2.91 que se encuentra en la fila 8. Si miramos en el dataset la provincia en el la fila 8 encontramos a FUENCARRAL-EL PARDO.
+
+# Ejercicio 5
+
+> Haz uso de tidymodels para calcular las componentes y las 5 componentes que más varianza capturan en una matriz de gráficas (la diagonal la propia densidad de las componentes, fuera de la diagonal los datos proyectados en la componente (i,j)). Codifica el color como el partido más votado. Al margen de la varianza explicada, ¿qué par de componentes podrían servirnos mejor para «clasificar» nuestros barrios según el partido más votado?
+
+```{r eval = TRUE}
+# Completa el código
+
+receta <- 
+  recipe(Partido~., data = distritos) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_zv(all_numeric_predictors()) %>%
+  step_pca(all_numeric_predictors(),num_comp = 5, prefix = "PC")
+receta
+
+```
+
+```{r}
+
+data_pc <- bake(receta %>% prep(), new_data = NULL)
+data_pc
+
+```
+
+```{r}
+ggplot(data_pc,
+       aes(x = .panel_x, y = .panel_y,
+           color = Partido, fill = Partido)) +
+    geom_point(alpha = 0.4, size = 1) +
+    ggforce::geom_autodensity(alpha = 0.3) +
+    ggforce::facet_matrix(vars(-Partido, -Distrito), layer.diag = 2) + 
+    scale_color_brewer(palette = "Dark2") + 
+    scale_fill_brewer(palette = "Dark2")+ 
+    theme_minimal()+
+    labs(title = "PCA con tidymodels")
+```
+
+Para poder clasificar los barrios de la mejor forma y diferenciando los dos partidos más votados tendrían que ser las combinación de variables donde el gráfico esté mejor diferenciado, es decir, tener clara la diferencia entre unos y otros, no nos serviria tener un gráfico con los puntos de las dos variables mezcladas. Por estos motivos hay diferentes combinaciones de variables que podrían servir para el estudio pero me quedo con la combinación de la PC1 con la PC3 o la PC4. 
+
+# Ejercicio 6 (opcional)
+
+> Comenta todo lo que consideres tras un análisis numérico y visual, y que no haya sido preguntado

@@ -1,0 +1,591 @@
+---
+title: "Práctica II"
+description: |
+  Análisis clúster
+author:
+  - name: Gerard Chicot Navalls (DNI 41579486V)
+    affiliation: Universidad Complutense de Madrid
+    affiliation_url: 
+date: "`r Sys.Date()`"
+output:
+    distill::distill_article:
+        highlight: kate
+        colorlinks: true
+        code_folding: false
+        toc: true            
+        toc_depth: 3     
+---
+
+```{r setup, include = FALSE}
+# Ajuste comunes de los chunk
+knitr::opts_chunk$set(fig.width = 9, fig.asp = 1, out.width = "100%",
+                      message = FALSE, warning = FALSE,
+                      echo = TRUE, res = 400)
+```
+
+# Instrucciones (leer antes de empezar)
+
+* Modifica dentro del documento `.Rmd` tus datos personales (nombre y DNI) ubicados en la cabecera del archivo.
+
+* Asegúrate antes de seguir editando el documento que el archivo `.Rmd` compila (Knit) correctamente y se genera el `html` correspondiente.
+
+* Los chunks creados están o vacíos o incompletos, de ahí que tengan la opción `eval = FALSE`. Una vez que edites lo que consideres debes de cambiar a `eval = TRUE` para que los chunk se ejecuten
+
+## Paquetes necesarios
+
+Necesitaremos los siguientes paquetes:
+
+* **Manejo de datos**: paquete `{tidyverse}`.
+* **Modelos**: paquete `{tidymodels}`
+* **Lectura excel**: paquete `{readxl}`
+* **Resumen numérico**: paquete `{skimr}`.
+* **Visualización de clústers y PCA**: paquete `{factoextra}` y `{FactoMineR}`
+* **Clustering divisivo**: paquete `{cluster}`
+
+```{r paquetes}
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+library(skimr)
+library(factoextra)
+library(FactoMineR)
+library(cluster)
+library(corrr)
+library(heatmaply)
+library(corrplot)
+```
+
+
+# Carga de datos
+
+El archivo de datos a usar será `provincias.xlsx`
+
+```{r}
+provincias <- read_xlsx(path = "./provincias.xlsx")
+```
+
+El fichero contiene **información socioeconómica de las provincias españolas**
+
+```{r}
+glimpse(provincias)
+```
+
+
+Algunas de las variables son:
+
+* `Prov`: nombre de la provincia
+* `Poblacion`: habitantes
+* `Mortalidad`, `Natalidad`: tasa de mortalidad/natalidad (en tantos por mil)
+* `IPC`: índice de precios de consumo (sobre un valor base de 100).
+* `NumEmpresas`: número de empresas.
+* `PIB`: producto interior bruto
+* `CTH`: coyuntura turística hotelera (pernoctaciones en establecimientos hoteleros)
+
+# Ejercicio 1:
+
+> Calcula la matriz de covarianzas y de correlaciones. Calcula de nuevo la matriz deUsa el paquete `{corrplot}` para una representación gráfica de la misma. Detalla y comenta lo que consideres para su correcta interpretación.
+
+```{r eval = TRUE}
+provincias2 <- provincias %>% select(-Prov)
+```
+
+```{r eval = TRUE}
+# Completa el código
+
+cov_mat <-
+  cov(provincias2)
+
+cov_mat
+```
+
+```{r}
+cor_mat <-
+  provincias2 %>% correlate(diagonal = 1)
+cor_mat
+```
+
+```{r}
+corrplot(cor(provincias2), type = "upper", tl.col = "black", method = "square")
+```
+Podemos observar como existen correlaciones positivas muy fuertes con muchas de las variables y solo dos de correlación negativa. 
+
+- Mortalidad esta correlacionada negativamente con Natalidad y TasaActividad.
+
+- IPC está correlada positivamente con Industria y Construcción pero está correlada negativamente con TasaParo. 
+
+- Población esta muy correlada positivamente con NumEmpresas, Industria, Construcción, CTH, Infor, AFS, APT, Ocupados, PIB, TVF y VS.
+
+- NumEmpresas esta muy correlada positivamente con Industria, Construcción, CTH, Infor, AFS, APT, Ocupados, PIB, TVF y VS.
+
+- Industria esta muy correlada positivamente con Construcción, CTH, Infor, AFS, APT, Ocupados, PIB, TVF y VS.
+
+- Construccion esta muy correlada positivamente con  CTH, Infor, AFS, APT, Ocupados, PIB, TVF y VS.
+
+- CTH esta muy correlada positivamente con Infor, AFS, APT, Ocupados, PIB, TVF y VS.
+
+- Infor esta muy correlada positivamente con AFS, APT, Ocupados, PIB, TVF y VS.
+
+- AFS esta muy correlada positivamente con APT, Ocupados, PIB, TVF y VS.
+
+- APT esta muy correlada positivamente con Ocupados, PIB, TVF y VS.
+
+- Ocupados esta muy correlada positivamente con  PIB, TVF y VS.
+
+- PIB esta correlada positivamente con TVF y VS.
+
+- TVF esta correlada positivamente VS.
+
+
+# Ejercicio 2:
+
+> Estandariza los datos y guardalos en provincias_std
+
+```{r eval = TRUE}
+# Completa el código
+provincias_std <- provincias2 %>% mutate_all(~(scale(.) %>% as.vector))
+
+provincias_std
+```
+
+# Ejercicio 3:
+
+> Calcula con `eigen()` los autovalores y autovectores de la matriz de correlaciones e interpreta dichos resultados en relación a las componentes principales de las variables originales.
+
+```{r eval = TRUE}
+# Completa el código
+cov_mat <- cov(provincias_std)
+cov_mat
+
+autoelementos <- eigen(cov_mat)
+
+autoelementos
+```
+
+Podemos observaor como los autovalores aportan información sobre cada componente en relación con su varianza, es decir, cuanto más grande sean los valores más información aportan y cuanto más pequeño menos. Gracias a esta información podemos ver los componentes que explican mejor y ver con que elementos me tengo que quedar para seleccionar pocas variables pero con una gran explicación.
+
+Vemos como el primer valor contiene un valor muy superiror a los demás, con lo que podemos saber que será una componente que nos explicará muy bien. Todos los valores por encima de 0 son valores que dan muy buena explicación y los que están por debajo del 0 muestran colinealidad. 
+
+# Ejercicio 4:
+
+> Haciendo uso de `PCA()` del paquete `{FactoMineR}` calcula todas las componentes principales. Repite de nuevo el análisis con el mínimo número de componentes necesairas para capturar al menos el 95% de la información de los datos.
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit <-
+  PCA(provincias2, scale.unit = TRUE,
+      ncp = ncol(provincias2), graph = FALSE)
+
+pca_fit$eig
+```
+
+```{r eval = TRUE}
+# Completa el código
+pca_fit$svd$V
+```
+
+```{r eval = TRUE}
+# Completa el códigO
+pca_fit$var$contrib
+```
+
+```{r eval = TRUE}
+pca_fit2 <-
+  PCA(provincias2, scale.unit = TRUE,
+      ncp = 6 , graph = FALSE)
+
+pca_fit2$eig
+```
+
+```{r eval = TRUE}
+pca_fit2$svd$V
+```
+
+```{r eval = TRUE}
+pca_fit2$var$contrib
+```
+
+Como podemos observar después de todo este análisis es que con seis componentes llegamos al 95% de la explicación de toda la información.
+
+# Ejercicio 5:
+
+> Realiza las gráficas que consideres más útiles para poder interpretar adecuadamente las componentes principales obtenidas. ¿Cuál es
+la expresión para calcular la primera componente en función de las variables originales?
+
+```{r eval = TRUE}
+fviz_eig(pca_fit,
+         barfill = "darkolivegreen",
+         addlabels = TRUE) +
+  theme_minimal() +
+  labs(x = "Componente", 
+       y = "% varianza explicada",
+       title = "Porcentaje de varianza explicada")
+```
+
+En este gráfico podemos observar la explicación de las distintas componentes y su porcentaje de varianza explicada. Vemos cómo las primeras componentes tienen un porcentaje mayor y va bajando hasta ver que no aportan nada. Solo con las seis primeras componentes llegamos a un 95% de la varianza y las restantes aportan menos del 3%, con lo cual podríamos prescindir de ellas.
+
+```{r eval = TRUE}
+cumvar <- as_tibble(pca_fit$eig)
+names(cumvar) <- c("lambda", "var", "cumvar")
+ggplot(cumvar, aes(x = 1:18, y = cumvar)) +
+  geom_col(fill = "pink") +
+  geom_hline(yintercept = 95,
+             linetype = "dashed") +
+  theme_minimal() +
+  labs(x = "Componente", 
+       y = "% varianza explicada",
+       title = "% varianza acumulada")
+```
+
+Esta gráfica explica lo mismo que la anterior pero lo vemos de distinta manera. Aquí vemos el porcentaje de varianza acumulada y así ver el porcentaje que hay de la suma acumulada de cada componente según la varianza aportada. Podemos concluir otra vez que con seis componentes llegamos a un índice superiror al 95%.
+
+```{r eval = TRUE}
+# Completa el código
+fviz_cos2(pca_fit, choice = "var",
+          axes = 1:3)
+```
+
+Aquí visualizamos el porcentaje de la varianza de las 3 primeras componentes. Podemos observar el peso que tiene cada variable y su porcentaje de representación.
+
+# Ejercicio 6:
+
+> ¿Cuál es la contribución de las variables originales en cada componente principal seleccionada? Proporciona las nuevas coordenadas de los datos. ¿Cuál de las variables es la que está peor explicada?
+
+```{r eval = TRUE}
+
+pca_fit$var$contrib
+
+```
+
+```{r eval = TRUE}
+# Completa el código
+pca_scores <- as_tibble(pca_fit$ind$coord)
+pca_scores
+```
+
+```{r}
+col <- c("#00AFBB", "#E7B800", "#FC4E07")
+fviz_pca_var(pca_fit2, col.var = "cos2",
+             gradient.cols = col,
+             repel = FALSE) +
+  theme_minimal() + 
+  labs(title = "Coordenadas de las variables",
+       color = "Prop. var. explicada")
+```
+
+Nos encontramos con la proporción de la varianza explicada. En este gráfico podemos observar como según la proporción de la varianza explicada que porcentaje tiene cada variable en un eje de coordenadas y así ver el peso de cada variable.
+
+Observamos la proporción de la varianza explicada por cada componente. Podemos concluir que la variable provincias tiene mucho peso, igual que Mortalidad pero en un porcentaje un poco menor. Realmente las provincias son las que mejor varianza explicada tienen. Luego podemos encontrar las variables de TasaParo, Natalidad, TasaActividad, VS y IPC que estarían al 50% de la proporción de la variable explicada. Por último hay CANE que sería la variable peor explicada.
+
+# Ejercicio 7:
+
+> Si tuviéramos que construir un índice que valore de forma conjunta el desarrollo económico de una provincia, como se podría construir utilizando una combinación lineal de todas las variables. ¿Cuál sería el valor de dicho índice en Madrid? ¿Cual sería su valor en Melilla? 
+
+# Ejercicio 8:
+
+> Calcula la matriz de distancias de los datos. Representa un mapa de calor de la matriz de datos, estandarizado y sin estandarizar, así como de la matriz de distancias. Comenta si se detectan inicialmente grupos de provincias.
+
+```{r eval = TRUE}
+provincias_sample <- provincias %>% slice_sample(n = 50)
+
+d <- dist(provincias_sample %>%
+            select(-Prov) %>% 
+            mutate(across(where(is.numeric), ~scale(.))),
+          method = "euclidean")
+
+fviz_dist(d, show_labels = TRUE)
+```
+
+Si que podemos ver como hay grupos según el valor de la matriz de distancia de los datos. Los elementos con valores más grandes, es decir, azul van a tendir a crear grupos entre si.
+
+```{r eval = TRUE}
+provincias_sample <- provincias %>% slice_sample(n = 50)
+
+library(heatmaply)
+heatmaply(provincias_sample,
+          seriate = "mean",
+          row_dend_left = TRUE,
+          plot_method = "plotly")
+```
+
+Sin estanderizar podemos observar que los grupos son muy generalizados, no podemos concretar mucho. Podemos observar como hay dos grandes grupos compuestos de grupos muy pequeños.
+
+```{r eval = TRUE}
+heatmaply(provincias %>%  mutate(across(where(is.numeric), ~scale(.))),
+          seriate = "mean", row_dend_left = TRUE, plot_method = "plotly")
+```
+
+Al estanderizar los datos podemos ver con muchas más claridad las agrupaciones de los distintos grupos. Podemos observar como siguen habiendo dos grandes grupos compuestos de grupos más pequeños pero tamibén se puede ver como el grupo de la izquierda que tiene que ver con la Natalidad, la Mortalidad, CANE, TasaActividad los grupos son más grandes, más genéricos. Los grupos de la derecha son más pequeños y necesitan de otras para formar grupos más grandes.
+
+# Ejercicio 9:
+
+> Realiza varios análisis de clúster jerárquico con distintos enlaces y comenta las diferencias. En cada caso visualiza el dendograma y comenta cuántos clusters recomendarías usar.
+
+```{r eval = TRUE}
+single_clust <-
+  hclust(d, method = "single")
+
+groups <- cutree(single_clust, k = 6)
+
+fviz_dend(single_clust, k = 3, cex = 0.5, 
+          k_colors = c("#2E9FDF", "#00AFBB", "#E7B800"),
+          color_labels_by_k = TRUE, rect = TRUE) +
+  labs(title = "Dendograma (simple)")
+```
+
+Podemos observar un gran clúster formado por la mayoria de las muestras y después dos clústers individuales que se unen para después unirse al más grande.
+
+```{r eval = TRUE}
+provincias_scale <-
+  provincias %>% select(-Prov) %>% 
+  mutate(across(where(is.numeric),
+                ~scale(.)))
+
+d <-
+  dist(provincias_scale, method = "euclidean")
+
+
+single_clust <-
+  hclust(d, method = "single")
+groups <- cutree(single_clust, k = 3)
+fviz_cluster(list(data = provincias_scale,
+                  cluster = groups),
+             palette =
+               c("#2E9FDF", "#00AFBB", "#E7B800"),
+             ellipse.type = "convex", 
+             repel = TRUE,
+             show.clust.cent = FALSE) +
+  labs(title = "Cluster (single)") +
+  theme_minimal()
+```
+
+Con toda la muestra vemos cómo si que diferencia tres grandes grupos compuesto por casi todas las muestras y dos valores completamente a parte que formarían dos grupos más.
+
+```{r eval = TRUE}
+# Clustering (complete)
+complete_clust <-
+  hclust(d, method = "complete")
+
+fviz_dend(complete_clust, k = 3,
+          cex = 0.5, 
+          k_colors =
+            c("#2E9FDF", "#00AFBB", "#E7B800"),
+             color_labels_by_k = TRUE, 
+          rect = TRUE) +
+  labs(title = "Dendograma (complete)")
+```
+
+El dendograma complete vemos como hace los grupos un poco distintos pero con la similitud de que hay una gran representación de un clúster, pero los otros dos clústers tienen un poco más de representación. Vemos a diferencia del otro dendograma que un clúster pequeño se une al grande dejando solo a otro clúster pequeño.
+
+```{r eval = TRUE}
+groups2 <- cutree(complete_clust, k = 3)
+
+d <-
+  dist(provincias_scale, method = "euclidean")
+
+complete_clust <-
+  hclust(d, method = "complete")
+
+groups <- cutree(complete_clust, k = 3)
+
+fviz_cluster(list(data = provincias_scale,
+                  cluster = groups2),
+             palette =
+               c("#2E9FDF", "#00AFBB", "#E7B800"),
+             ellipse.type = "convex", 
+             repel = TRUE,
+             show.clust.cent = FALSE) +
+  labs(title = "Cluster (complete)") +
+  theme_minimal()
+```
+
+En la representación de los clústers podemos ver cómo los dos clústers pequeños son un poco más grandes pero de todas formas su diferencia con el clúster grande es muy significativa.
+
+```{r eval = TRUE}
+# Clustering (average)
+average_clust <-
+  hclust(d, method = "average")
+
+fviz_dend(average_clust, k = 3,
+          cex = 0.5, 
+          k_colors =
+            c("#2E9FDF", "#00AFBB", "#E7B800"),
+          color_labels_by_k = TRUE, 
+          rect = TRUE) +
+  labs(title = "Dendograma (average)")
+```
+
+El dendograma average es igual que el complete, es decir, nos aporta la misma explicación.
+
+```{r eval = TRUE}
+groups3 <- cutree(average_clust, k = 3)
+
+d <-
+  dist(provincias_scale, method = "euclidean")
+
+average_clust <-
+  hclust(d, method = "average")
+
+groups <- cutree(average_clust, k = 3)
+
+fviz_cluster(list(data = provincias_scale,
+                  cluster = groups3),
+             palette =
+               c("#2E9FDF", "#00AFBB", "#E7B800"),
+             ellipse.type = "convex", 
+             repel = TRUE,
+             show.clust.cent = FALSE) +
+  labs(title = "Cluster (average)") +
+  theme_minimal()
+```
+
+La representación del clúster igual, nos muestra la misma información que el complete y por lo tanto la misma explicación.
+
+```{r eval = TRUE}
+# Clustering (centroid)
+centroid_clust <-
+  hclust(d, method = "centroid")
+
+fviz_dend(centroid_clust, k = 3,
+          cex = 0.5, 
+          k_colors =
+            c("#2E9FDF", "#00AFBB", "#E7B800"),
+          color_labels_by_k = TRUE, 
+          rect = TRUE) +
+  labs(title = "Dendograma (centroid)")
+```
+
+```{r}
+groups <- cutree(centroid_clust, k = 3)
+
+fviz_cluster(list(data = provincias_scale,
+                  cluster = groups),
+             palette =
+               c("#2E9FDF", "#00AFBB", "#E7B800"),
+             ellipse.type = "convex", 
+             repel = TRUE,
+             show.clust.cent = FALSE) +
+  labs(title = "Cluster (centroid)") +
+  theme_minimal()
+```
+
+En el dendograma centroid vemos como hay mucha diferencia con los otros estudiados. Podemos observar como hay tres clústers pero la representación de los pequeños tienen mucha más representación.Incluso podemos ver como no son formados por los elementos de al lado sinó que búscan mucho más allá.
+
+Pero representación del clúster es como las anteriores, hay un gran grupo y luego dos elementos individuales.
+
+```{r eval = TRUE}
+hc_diana <- diana(x = d, diss = TRUE, stand = FALSE)
+
+fviz_dend(hc_diana , k = 3,
+          cex = 0.5, 
+          k_colors =
+            c("#2E9FDF", "#00AFBB", "#E7B800"),
+          color_labels_by_k = TRUE, 
+          rect = TRUE) +
+  labs(title = "Dendograma (DIANA, divisivo)")
+```
+
+El dendograma DIANA vemos como también hay tres clústers donde existe uno con mucha representación y los otros dos son más pequeños.
+# Ejercicio 10:
+
+> ¿Qué número óptimo de clusters nos indican los criterios Silhoutte y de Elbow? Representar los individuos agrupados según el número de clusters elegido.
+
+```{r eval = TRUE}
+
+centers <- tibble(cluster = factor(1:3), num_points =  c(100, 150, 50),
+                  x = c(5, 0, -3), y = c(-1, 1, -2))
+```
+
+```{r eval = TRUE}
+set.seed(1234567)
+```
+
+```{r}
+labelled_points <- centers %>% mutate(x = map2(num_points, x, rnorm), y = map2(num_points, y, rnorm)) %>% 
+  select(-num_points) %>%  unnest(cols = c(x, y))
+```
+
+```{r eval = TRUE}
+fviz_nbclust(provincias_scale, kmeans,
+             method = "wss") +
+  geom_vline(xintercept = 3,
+             linetype = 2) +
+  theme_minimal() +
+  labs(x = "nº clústeres (k)",
+       y = "Variabilidad total intra-clústeres (W)",
+       title = "Número óptimo basado en variabilidad total intra-clústeres")
+```
+
+Vemos como el número óptimo de clústers basado en la variablidad total intra_clústers nos dice que 3 clústers sería lo más óptimo. Podemos observar como a partir del tercero la variablidad baja mucho y que con los tres primeros tendríamos un gran número de variabilidad.
+
+```{r eval = TRUE}
+fviz_nbclust(provincias_scale, kmeans,
+             method = "silhouette") +
+  theme_minimal() +
+  labs(x = "nº clústeres (k)",
+       y = "Silhouette media",
+       title = "Número óptimo basado en silhouette")
+```
+
+En cambio Silhouette nos comenta que la coherencia de clústers la allamos en 2 y así tendríamos la mejor agrupación.
+
+```{r eval = TRUE}
+kclust <- kmeans(provincias_scale,
+                 centers = 3, iter.max = 50)
+d <- dist(provincias_scale, method = "euclidean")
+sil <- silhouette(kclust$cluster, d)
+sil
+```
+
+Aquí podemos observar el cluster de cada ID y cual es su cluster vecino más proximo con el valor de la distancia entre uno y otro.  
+
+```{r eval = TRUE}
+kclust <- kmeans(provincias_scale,
+                 centers = 3, iter.max = 50)
+sil <- silhouette(kclust$cluster, d)
+row.names(sil) <- row.names(provincias_scale)
+
+fviz_silhouette(sil, label = TRUE) +
+  scale_fill_manual(values =
+                      c("#2E9FDF", "#00AFBB",
+                        "#E7B800")) +
+  scale_color_manual(values =
+                      c("#2E9FDF", "#00AFBB",
+                        "#E7B800")) +
+  theme_minimal() +
+  labs(title =
+         "Índice silhouette para k-means con k = 3") +
+  # Giramos etiquetas eje
+  theme(axis.text.x =
+          element_text(angle = 90,
+                       vjust = 0.5,
+                       hjust=1))
+```
+
+Por un lado podemos ver como tenemos el número de clusters allados con su tamaño y en el otro su representación gráfica.
+
+# Ejercicio 11:
+
+> Con el número de clusters decidido en el apartado anterior realizar un agrupamiento no jerárquico de k-medias. Representar los clusters formados en los planos de las Componentes principales. Interpreta los resultados y evalúa la calidad del análisis clúster. Explica las provincias que forman cada uno de los clusters y comentar cuales son las características socioeconómicas que las hacen pertenecer a dicho cluster.
+
+```{r eval = TRUE}
+kclust <- kmeans(provincias_scale,
+                 centers = 3, iter.max = 50)
+
+fviz_cluster(list(data =
+                    provincias_scale,
+                  cluster = kclust$cluster),
+             palette =
+               c("#2E9FDF", "#00AFBB", "#E7B800"),
+             ellipse.type = "convex", 
+             repel = TRUE,
+             show.clust.cent = FALSE) +
+  labs(title = "Cluster (k-means)") +
+  theme_minimal()
+```
+
+Podemos ver como en esta representación de los clústers hay mucha diferencia con las anteriores representaciónes, donde ahora existen dos grandes grupos y uno de más pequeño. Podemos observar como el grupo 2, que es el que está más alejado se comporta muy diferente a las otras provincias, debe ser por tener más PIB, número de empresas, indústria, población... Los otros dos grupos si que tienen más parecidos y los diferencias variables más concretas.  
+
+Según este estudio las provincias de este dataset se dividen en dos grandes clústers. El primero está formado por las provincias que hay desarrollo económico, donde se la diferencia recae en variables como NumEmpresas, Industria, Construcción, PIP, TasaActividad, etc. El tercer cluster estaría formado por las provincias en los que no hay dicho desarrollo. 
+
+
+
